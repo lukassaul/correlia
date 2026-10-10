@@ -1,0 +1,3 @@
+place_id,indicator_code,year,value,support_level,source_identifier,collection_method,aggregation_method,denominator,notes
+840,WB_NY.GDP.PCAP.CD,2023,76399.23,country,10.1596/wdi,administrative,none,per_capita,Current USD
+276,WB_NY.GDP.PCAP.CD,2023,48718.19,country,10.1596/wdi,administrative,none,per_capita,Current USD

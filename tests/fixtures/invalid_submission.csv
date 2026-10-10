@@ -1,0 +1,4 @@
+place_id,indicator_code,year,value,support_level,source_identifier
+999999,UNKNOWN_INDICATOR,1820,abc,country,test
+840,WB_NY.GDP.PCAP.CD,2023,76399.23,country,10.1596/wdi
+840,WB_NY.GDP.PCAP.CD,2023,76399.23,country,10.1596/wdi
