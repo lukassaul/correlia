@@ -2,7 +2,7 @@
 """
 Correlia GeoNames loader.
 
-Reads a GeoNames dump file and populates analysis.places with the geographic
+Reads a GeoNames dump and populates analysis.places with the geographic
 units Correlia uses as its canonical backbone: countries, admin-1 regions,
 admin-2 regions, and populated places.
 
@@ -11,19 +11,17 @@ GeoNames publishes daily dumps at:
 
 The files used by this loader are:
 
-  countryInfo.txt    Country metadata (ISO codes, names)
-  admin1CodesASCII.txt   First-level administrative divisions
-  admin2Codes.txt    Second-level administrative divisions
-  allCountries.txt   All populated places and features
-                     (alternatively: cities5000.txt, cities15000.txt, etc.)
+  countryInfo.txt         Country metadata (ISO codes, names)
+  admin1CodesASCII.txt    First-level administrative divisions
+  admin2Codes.txt         Second-level administrative divisions
+  allCountries.txt        All populated places and features
+                          (alternatively cities5000.txt, cities15000.txt)
 
 Download and unzip them into a directory, then run:
 
   python scripts/load_geonames.py --data-dir /path/to/geonames --dsn "postgresql://..."
 
 The loader is idempotent: it uses UPSERT semantics so re-running it is safe.
-Records are keyed on (geonames_id) and (iso_alpha3) and (iso_3166_2) as
-appropriate.
 
 Exit codes:
   0  load completed
@@ -55,13 +53,6 @@ except ImportError:
 # GeoNames file parsing
 # ---------------------------------------------------------------------------
 
-# GeoNames feature codes we care about, mapped to Correlia geo_level.
-# See https://www.geonames.org/export/codes.html
-ADMIN1_FEATURE_CODES = {"ADM1"}
-ADMIN2_FEATURE_CODES = {"ADM2"}
-COUNTRY_FEATURE_CODES = {"PCLI", "PCLD", "PCLS", "PCLF", "PCLIX", "PCL"}
-
-
 def open_geonames_file(data_dir: Path, name: str) -> io.TextIOWrapper:
     """
     Open a GeoNames file, transparently handling both the plain .txt form
@@ -87,12 +78,11 @@ def iter_country_info(data_dir: Path) -> Iterator[dict]:
     Parse countryInfo.txt.
 
     Format (tab-separated, no header):
-    0  ISO
-    1  ISO3
+    0  ISO (alpha-2)
+    1  ISO3 (alpha-3)
     2  ISO-Numeric
     3  fips
     4  Country
-    5  Capital
     ...
     16 geonameid
     """
@@ -239,24 +229,15 @@ def upsert_country(cur, c: dict) -> int:
         INSERT INTO analysis.places
             (canonical_name, geo_level, iso_alpha3, geonames_id)
         VALUES (%s, 'country', %s, %s)
-        ON CONFLICT (place_id) DO NOTHING
+        ON CONFLICT (iso_alpha3) WHERE iso_alpha3 IS NOT NULL
+        DO UPDATE SET
+            canonical_name = EXCLUDED.canonical_name,
+            geonames_id = COALESCE(EXCLUDED.geonames_id, analysis.places.geonames_id)
         RETURNING place_id
         """,
         (c["name"], c["iso_alpha3"], c["geonames_id"]),
     )
-    row = cur.fetchone()
-    if row:
-        return row[0]
-
-    # Already existed; look it up
-    cur.execute(
-        "SELECT place_id FROM analysis.places WHERE iso_alpha3 = %s",
-        (c["iso_alpha3"],),
-    )
-    row = cur.fetchone()
-    if not row:
-        raise RuntimeError(f"country upsert failed for {c['iso_alpha3']}")
-    return row[0]
+    return cur.fetchone()[0]
 
 
 def upsert_admin1(cur, a: dict, parent_id: int) -> int:
@@ -266,23 +247,16 @@ def upsert_admin1(cur, a: dict, parent_id: int) -> int:
         INSERT INTO analysis.places
             (canonical_name, geo_level, parent_place_id, iso_3166_2, geonames_id)
         VALUES (%s, 'admin1', %s, %s, %s)
-        ON CONFLICT (place_id) DO NOTHING
+        ON CONFLICT (iso_3166_2) WHERE iso_3166_2 IS NOT NULL
+        DO UPDATE SET
+            canonical_name = EXCLUDED.canonical_name,
+            parent_place_id = EXCLUDED.parent_place_id,
+            geonames_id = COALESCE(EXCLUDED.geonames_id, analysis.places.geonames_id)
         RETURNING place_id
         """,
         (a["name"], parent_id, a["iso_3166_2"], a["geonames_id"]),
     )
-    row = cur.fetchone()
-    if row:
-        return row[0]
-
-    cur.execute(
-        "SELECT place_id FROM analysis.places WHERE iso_3166_2 = %s",
-        (a["iso_3166_2"],),
-    )
-    row = cur.fetchone()
-    if not row:
-        raise RuntimeError(f"admin1 upsert failed for {a['iso_3166_2']}")
-    return row[0]
+    return cur.fetchone()[0]
 
 
 def upsert_admin2(cur, a: dict, parent_id: int) -> int:
@@ -292,23 +266,16 @@ def upsert_admin2(cur, a: dict, parent_id: int) -> int:
         INSERT INTO analysis.places
             (canonical_name, geo_level, parent_place_id, gdl_code, geonames_id)
         VALUES (%s, 'admin2', %s, %s, %s)
-        ON CONFLICT (place_id) DO NOTHING
+        ON CONFLICT (gdl_code) WHERE gdl_code IS NOT NULL
+        DO UPDATE SET
+            canonical_name = EXCLUDED.canonical_name,
+            parent_place_id = EXCLUDED.parent_place_id,
+            geonames_id = COALESCE(EXCLUDED.geonames_id, analysis.places.geonames_id)
         RETURNING place_id
         """,
         (a["name"], parent_id, a["gdl_code"], a["geonames_id"]),
     )
-    row = cur.fetchone()
-    if row:
-        return row[0]
-
-    cur.execute(
-        "SELECT place_id FROM analysis.places WHERE gdl_code = %s",
-        (a["gdl_code"],),
-    )
-    row = cur.fetchone()
-    if not row:
-        raise RuntimeError(f"admin2 upsert failed for {a['gdl_code']}")
-    return row[0]
+    return cur.fetchone()[0]
 
 
 def upsert_city(cur, p: dict, parent_id: int | None) -> int:
@@ -321,7 +288,11 @@ def upsert_city(cur, p: dict, parent_id: int | None) -> int:
             %s, 'city', %s, %s,
             ST_SetSRID(ST_MakePoint(%s, %s), 4326)
         )
-        ON CONFLICT (place_id) DO NOTHING
+        ON CONFLICT (geonames_id) WHERE geonames_id IS NOT NULL
+        DO UPDATE SET
+            canonical_name = EXCLUDED.canonical_name,
+            parent_place_id = EXCLUDED.parent_place_id,
+            geom = EXCLUDED.geom
         RETURNING place_id
         """,
         (
@@ -332,18 +303,7 @@ def upsert_city(cur, p: dict, parent_id: int | None) -> int:
             p["latitude"],
         ),
     )
-    row = cur.fetchone()
-    if row:
-        return row[0]
-
-    cur.execute(
-        "SELECT place_id FROM analysis.places WHERE geonames_id = %s",
-        (p["geonames_id"],),
-    )
-    row = cur.fetchone()
-    if not row:
-        raise RuntimeError(f"city upsert failed for {p['geonames_id']}")
-    return row[0]
+    return cur.fetchone()[0]
 
 
 # ---------------------------------------------------------------------------
@@ -374,10 +334,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.dsn:
-        print(
-            "error: --dsn or CORRELIA_DSN must be set",
-            file=sys.stderr,
-        )
+        print("error: --dsn or CORRELIA_DSN must be set", file=sys.stderr)
         return 2
 
     if not args.data_dir.is_dir():
@@ -418,7 +375,6 @@ def main() -> int:
                 admin2_ids: dict[str, int] = {}
                 n_admin2 = 0
                 for a in iter_admin2(args.data_dir):
-                    # derive the parent admin1 code: "US.CA.037" -> "US.CA"
                     parts = a["gdl_code"].split(".")
                     admin1_code = f"{parts[0]}.{parts[1]}"
                     parent_id = admin1_ids.get(admin1_code)
@@ -432,11 +388,13 @@ def main() -> int:
                 # ---- Cities ------------------------------------------------
                 n_cities = 0
                 for p in iter_places(args.data_dir, args.places_file):
-                    # find parent: admin2 if we have it, otherwise admin1,
-                    # otherwise country
                     parent_id = None
                     if p["admin2_code"]:
-                        key = f"{p['country_code']}.{p['admin1_code']}.{p['admin2_code']}"
+                        key = (
+                            f"{p['country_code']}."
+                            f"{p['admin1_code']}."
+                            f"{p['admin2_code']}"
+                        )
                         parent_id = admin2_ids.get(key)
                     if parent_id is None and p["admin1_code"]:
                         key = f"{p['country_code']}.{p['admin1_code']}"
