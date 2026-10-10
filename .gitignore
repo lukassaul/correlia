@@ -22,3 +22,6 @@ correlia_local.dump
 # OS
 .DS_Store
 Thumbs.db
+
+# Downloaded data files
+data/
