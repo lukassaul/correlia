@@ -1,0 +1,8 @@
+correlia.org {
+    encode gzip
+    reverse_proxy api:8000
+}
+
+www.correlia.org {
+    redir https://correlia.org{uri} permanent
+}

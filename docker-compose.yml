@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: correlia-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-correlia}
+      POSTGRES_DB: correlia
+    volumes:
+      - correlia_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d correlia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # No port published: the app reaches the DB over the compose network.
+
+  api:
+    build: .
+    container_name: correlia-api
+    restart: unless-stopped
+    environment:
+      CORRELIA_DSN: postgresql://postgres:${POSTGRES_PASSWORD:-correlia}@db:5432/correlia
+    depends_on:
+      db:
+        condition: service_healthy
+    # No port published: Caddy reaches the app over the compose network.
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: correlia-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  correlia_pgdata:
+    name: correlia_pgdata
+  caddy_data:
+  caddy_config:
