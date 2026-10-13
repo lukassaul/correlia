@@ -1,6 +1,14 @@
 correlia.org {
     encode gzip
-    reverse_proxy api:8000
+
+    handle / {
+        root * /srv/frontend
+        file_server
+    }
+
+    handle {
+        reverse_proxy api:8000
+    }
 }
 
 www.correlia.org {

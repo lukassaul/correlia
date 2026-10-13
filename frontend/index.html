@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Correlia — Multi-scale geographic correlation discovery</title>
+  <style>
+    :root {
+      --fg: #1a1a1a;
+      --bg: #fafafa;
+      --muted: #666;
+      --border: #ddd;
+      --accent: #2a5db0;
+      --accent-fg: #fff;
+      --panel: #fff;
+      --error: #b00020;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fg: #eaeaea;
+        --bg: #16181c;
+        --muted: #999;
+        --border: #2e3138;
+        --accent: #6b9df0;
+        --accent-fg: #0b0c0f;
+        --panel: #1e2126;
+        --error: #ff6b6b;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+      font-size: 16px;
+    }
+    header {
+      padding: 2rem 1.5rem 1rem;
+      max-width: 60rem;
+      margin: 0 auto;
+    }
+    header h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.75rem;
+      letter-spacing: -0.01em;
+    }
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    main {
+      max-width: 60rem;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    section h2 {
+      margin: 0 0 1rem;
+      font-size: 1.15rem;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0.75rem 0 0.25rem;
+    }
+    select, input[type=number], button {
+      font: inherit;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--fg);
+      width: 100%;
+      max-width: 100%;
+    }
+    button {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border: none;
+      cursor: pointer;
+      width: auto;
+      padding: 0.6rem 1.2rem;
+      margin-top: 1rem;
+      font-weight: 500;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 640px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .result {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .result .big {
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+    .result .meta {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 0.25rem;
+    }
+    .result dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 0.25rem 1rem;
+      margin: 1rem 0 0;
+      font-size: 0.9rem;
+    }
+    .result dt { color: var(--muted); }
+    .result dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .error {
+      color: var(--error);
+      margin-top: 1rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .mono {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.85rem;
+    }
+    footer {
+      max-width: 60rem;
+      margin: 0 auto;
+      padding: 1.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Correlia</h1>
+    <p>Multi-scale geographic correlation discovery.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Correlate two indicators</h2>
+      <form id="correlate-form">
+        <div class="grid">
+          <div>
+            <label for="indicator-a">Indicator A</label>
+            <select id="indicator-a" required></select>
+          </div>
+          <div>
+            <label for="indicator-b">Indicator B</label>
+            <select id="indicator-b" required></select>
+          </div>
+        </div>
+        <div class="grid">
+          <div>
+            <label for="support-level">Geographic level</label>
+            <select id="support-level">
+              <option value="country" selected>Country</option>
+              <option value="admin1">Admin-1 (state, province)</option>
+              <option value="admin2">Admin-2 (county, district)</option>
+              <option value="city">City</option>
+            </select>
+          </div>
+          <div>
+            <label>Year range</label>
+            <div class="grid" style="gap:0.5rem; margin-top:0.25rem;">
+              <input id="year-start" type="number" value="2000" min="1800" max="2100">
+              <input id="year-end" type="number" value="2020" min="1800" max="2100">
+            </div>
+          </div>
+        </div>
+        <button type="submit" id="submit-btn">Correlate</button>
+      </form>
+
+      <div id="result-area"></div>
+    </section>
+
+    <section>
+      <h2>Available indicators</h2>
+      <div id="indicators-area">
+        <p style="color:var(--muted)">Loading…</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Correlia is a research infrastructure for exploring correlations across
+    geographic datasets. Correlation is not causation — exploratory queries
+    across many indicators will produce false positives by design.
+    <a href="https://github.com/lukassaul/correlia">Source on GitHub</a>.
+  </footer>
+
+  <script>
+    const API = "";  // same origin
+
+    const $ = (sel) => document.querySelector(sel);
+
+    async function loadIndicators() {
+      const area = $("#indicators-area");
+      try {
+        const res = await fetch(`${API}/indicators`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const inds = data.indicators || [];
+
+        // Populate the two selects
+        const opts = inds.map((i) => {
+          const label = `${i.name} (${i.code})`;
+          return `<option value="${i.code}">${escapeHtml(label)}</option>`;
+        }).join("");
+        $("#indicator-a").innerHTML = opts;
+        $("#indicator-b").innerHTML = opts;
+        // Sensible defaults
+        if (inds.length >= 2) {
+          const codes = inds.map((i) => i.code);
+          if (codes.includes("NY.GDP.PCAP.CD")) $("#indicator-a").value = "NY.GDP.PCAP.CD";
+          if (codes.includes("SH.ALC.PCAP.LI")) $("#indicator-b").value = "SH.ALC.PCAP.LI";
+        }
+
+        // Populate the table
+        if (inds.length === 0) {
+          area.innerHTML = `<p style="color:var(--muted)">No indicators loaded yet.</p>`;
+          return;
+        }
+        const rows = inds.map((i) => `
+          <tr>
+            <td class="mono">${escapeHtml(i.code)}</td>
+            <td>${escapeHtml(i.name)}</td>
+            <td>${escapeHtml(i.unit || "")}</td>
+            <td>${escapeHtml(i.source_title || "")}</td>
+            <td class="num">${i.observation_count ?? 0}</td>
+            <td class="num">${i.year_min ?? ""}–${i.year_max ?? ""}</td>
+          </tr>
+        `).join("");
+        area.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th><th>Name</th><th>Unit</th><th>Source</th>
+                <th style="text-align:right">Observations</th>
+                <th style="text-align:right">Years</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      } catch (err) {
+        area.innerHTML = `<p class="error">Could not load indicators: ${escapeHtml(String(err))}</p>`;
+      }
+    }
+
+    async function runCorrelation(ev) {
+      ev.preventDefault();
+      const btn = $("#submit-btn");
+      const area = $("#result-area");
+      btn.disabled = true;
+      area.innerHTML = `<p style="color:var(--muted)">Computing…</p>`;
+
+      const params = new URLSearchParams({
+        indicator_a: $("#indicator-a").value,
+        indicator_b: $("#indicator-b").value,
+        support_level: $("#support-level").value,
+        year_start: $("#year-start").value,
+        year_end: $("#year-end").value,
+      });
+
+      try {
+        const res = await fetch(`${API}/correlate?${params}`);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `HTTP ${res.status}`);
+        }
+        if (!data.result) {
+          area.innerHTML = `<div class="result"><p>${escapeHtml(data.message || "No result.")}</p></div>`;
+          return;
+        }
+        const r = data.result;
+        if (r.r === null || r.r === undefined) {
+          area.innerHTML = `
+            <div class="result">
+              <p>Not enough paired observations to compute a correlation.</p>
+              <p class="meta">n = ${r.n}</p>
+            </div>`;
+          return;
+        }
+        area.innerHTML = `
+          <div class="result">
+            <div class="big">r = ${r.r.toFixed(4)}</div>
+            <div class="meta">${escapeHtml(data.indicator_a)} vs ${escapeHtml(data.indicator_b)} · ${escapeHtml(data.support_level)} · ${data.year_start}–${data.year_end}</div>
+            <dl>
+              <dt>Paired observations</dt><dd>${r.n.toLocaleString()}</dd>
+              <dt>Coefficient of determination (r²)</dt><dd>${r.r_squared.toFixed(4)}</dd>
+              <dt>Mean A</dt><dd>${formatNum(r.mean_a)}</dd>
+              <dt>Mean B</dt><dd>${formatNum(r.mean_b)}</dd>
+              <dt>Std dev A</dt><dd>${formatNum(r.std_a)}</dd>
+              <dt>Std dev B</dt><dd>${formatNum(r.std_b)}</dd>
+            </dl>
+          </div>`;
+      } catch (err) {
+        area.innerHTML = `<p class="error">${escapeHtml(String(err))}</p>`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function formatNum(x) {
+      if (x === null || x === undefined) return "—";
+      const abs = Math.abs(x);
+      if (abs >= 1e6 || (abs > 0 && abs < 1e-3)) return x.toExponential(3);
+      return x.toLocaleString(undefined, { maximumFractionDigits: 3 });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;",
+        '"': "&quot;", "'": "&#39;",
+      })[c]);
+    }
+
+    $("#correlate-form").addEventListener("submit", runCorrelation);
+    loadIndicators();
+  </script>
+</body>
+</html>

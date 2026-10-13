@@ -3,6 +3,8 @@ services:
     image: postgis/postgis:16-3.4
     container_name: correlia-db
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-correlia}
       POSTGRES_DB: correlia
@@ -35,6 +37,7 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend:/srv/frontend:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
