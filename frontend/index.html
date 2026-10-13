@@ -14,6 +14,7 @@
       --accent-fg: #fff;
       --panel: #fff;
       --error: #b00020;
+      --pos: #166534;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -25,6 +26,7 @@
         --accent-fg: #0b0c0f;
         --panel: #1e2126;
         --error: #ff6b6b;
+        --pos: #4ade80;
       }
     }
     * { box-sizing: border-box; }
@@ -82,6 +84,9 @@
       color: var(--fg);
       width: 100%;
       max-width: 100%;
+    }
+    select {
+      text-overflow: ellipsis;
     }
     button {
       background: var(--accent);
@@ -161,6 +166,8 @@
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       font-size: 0.85rem;
     }
+    .pos { color: var(--pos); }
+    .neg { color: var(--error); }
     footer {
       max-width: 60rem;
       margin: 0 auto;
@@ -170,6 +177,11 @@
       border-top: 1px solid var(--border);
     }
     footer a { color: var(--accent); }
+    .hint {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 0;
+    }
   </style>
 </head>
 <body>
@@ -179,6 +191,9 @@
   </header>
 
   <main>
+    <!-- ------------------------------------------------------------------ -->
+    <!-- Correlate two indicators                                            -->
+    <!-- ------------------------------------------------------------------ -->
     <section>
       <h2>Correlate two indicators</h2>
       <form id="correlate-form">
@@ -216,6 +231,61 @@
       <div id="result-area"></div>
     </section>
 
+    <!-- ------------------------------------------------------------------ -->
+    <!-- Scan for correlates                                                 -->
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Scan for correlates</h2>
+      <p class="hint">
+        Test one indicator against every other indicator in the database
+        and rank by strength of correlation.
+      </p>
+      <div class="grid">
+        <div>
+          <label for="scan-indicator">Indicator</label>
+          <select id="scan-indicator"></select>
+        </div>
+        <div>
+          <label for="scan-support-level">Geographic level</label>
+          <select id="scan-support-level">
+            <option value="country" selected>Country</option>
+            <option value="admin1">Admin-1</option>
+            <option value="admin2">Admin-2</option>
+            <option value="city">City</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid">
+        <div>
+          <label for="scan-year-start">Year start</label>
+          <input id="scan-year-start" type="number" value="2000" min="1800" max="2100">
+        </div>
+        <div>
+          <label for="scan-year-end">Year end</label>
+          <input id="scan-year-end" type="number" value="2020" min="1800" max="2100">
+        </div>
+      </div>
+      <div class="grid">
+        <div>
+          <label for="scan-min-n">Minimum paired observations</label>
+          <input id="scan-min-n" type="number" value="50" min="2">
+        </div>
+        <div>
+          <label for="scan-order">Rank by</label>
+          <select id="scan-order">
+            <option value="abs" selected>Absolute correlation</option>
+            <option value="pos">Positive correlation</option>
+            <option value="neg">Negative correlation</option>
+          </select>
+        </div>
+      </div>
+      <button type="button" id="scan-btn">Scan</button>
+      <div id="scan-result-area"></div>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- Available indicators                                                -->
+    <!-- ------------------------------------------------------------------ -->
     <section>
       <h2>Available indicators</h2>
       <div id="indicators-area">
@@ -236,34 +306,49 @@
 
     const $ = (sel) => document.querySelector(sel);
 
+    // ---------------------------------------------------------------------
+    // Indicators: load once, populate both dropdowns and the table
+    // ---------------------------------------------------------------------
+
+    let allIndicators = [];
+
     async function loadIndicators() {
       const area = $("#indicators-area");
       try {
         const res = await fetch(`${API}/indicators`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const inds = data.indicators || [];
+        allIndicators = data.indicators || [];
 
-        // Populate the two selects
-        const opts = inds.map((i) => {
+        // Populate the two correlate selects and the scan select
+        const opts = allIndicators.map((i) => {
           const label = `${i.name} (${i.code})`;
           return `<option value="${i.code}">${escapeHtml(label)}</option>`;
         }).join("");
         $("#indicator-a").innerHTML = opts;
         $("#indicator-b").innerHTML = opts;
+        $("#scan-indicator").innerHTML = opts;
+
         // Sensible defaults
-        if (inds.length >= 2) {
-          const codes = inds.map((i) => i.code);
-          if (codes.includes("NY.GDP.PCAP.CD")) $("#indicator-a").value = "NY.GDP.PCAP.CD";
-          if (codes.includes("SH.ALC.PCAP.LI")) $("#indicator-b").value = "SH.ALC.PCAP.LI";
+        const codes = allIndicators.map((i) => i.code);
+        if (codes.includes("NY.GDP.PCAP.CD")) {
+          $("#indicator-a").value = "NY.GDP.PCAP.CD";
+        }
+        if (codes.includes("SH.ALC.PCAP.LI")) {
+          $("#indicator-b").value = "SH.ALC.PCAP.LI";
+        }
+        if (codes.includes("SA_0000001688")) {
+          $("#scan-indicator").value = "SA_0000001688";
+        } else if (codes.includes("SH.ALC.PCAP.LI")) {
+          $("#scan-indicator").value = "SH.ALC.PCAP.LI";
         }
 
         // Populate the table
-        if (inds.length === 0) {
+        if (allIndicators.length === 0) {
           area.innerHTML = `<p style="color:var(--muted)">No indicators loaded yet.</p>`;
           return;
         }
-        const rows = inds.map((i) => `
+        const rows = allIndicators.map((i) => `
           <tr>
             <td class="mono">${escapeHtml(i.code)}</td>
             <td>${escapeHtml(i.name)}</td>
@@ -290,6 +375,10 @@
       }
     }
 
+    // ---------------------------------------------------------------------
+    // Correlate two indicators
+    // ---------------------------------------------------------------------
+
     async function runCorrelation(ev) {
       ev.preventDefault();
       const btn = $("#submit-btn");
@@ -308,9 +397,7 @@
       try {
         const res = await fetch(`${API}/correlate?${params}`);
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.detail || `HTTP ${res.status}`);
-        }
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
         if (!data.result) {
           area.innerHTML = `<div class="result"><p>${escapeHtml(data.message || "No result.")}</p></div>`;
           return;
@@ -324,9 +411,11 @@
             </div>`;
           return;
         }
+        const sign = r.r >= 0 ? "+" : "";
+        const cls = r.r >= 0 ? "pos" : "neg";
         area.innerHTML = `
           <div class="result">
-            <div class="big">r = ${r.r.toFixed(4)}</div>
+            <div class="big ${cls}">r = ${sign}${r.r.toFixed(4)}</div>
             <div class="meta">${escapeHtml(data.indicator_a)} vs ${escapeHtml(data.indicator_b)} · ${escapeHtml(data.support_level)} · ${data.year_start}–${data.year_end}</div>
             <dl>
               <dt>Paired observations</dt><dd>${r.n.toLocaleString()}</dd>
@@ -344,6 +433,84 @@
       }
     }
 
+    // ---------------------------------------------------------------------
+    // Scan for correlates
+    // ---------------------------------------------------------------------
+
+    async function runScan() {
+      const btn = $("#scan-btn");
+      const area = $("#scan-result-area");
+      const indicator = $("#scan-indicator").value;
+      if (!indicator) return;
+
+      btn.disabled = true;
+      area.innerHTML = `<p style="color:var(--muted)">Scanning… this may take a few seconds.</p>`;
+
+      const params = new URLSearchParams({
+        indicator: indicator,
+        support_level: $("#scan-support-level").value,
+        year_start: $("#scan-year-start").value,
+        year_end: $("#scan-year-end").value,
+        min_n: $("#scan-min-n").value,
+        order: $("#scan-order").value,
+        limit: 30,
+      });
+
+      try {
+        const res = await fetch(`${API}/scan?${params}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+        if (!data.results || data.results.length === 0) {
+          area.innerHTML = `<div class="result"><p>No correlations found at this support level and year range with n ≥ ${data.min_n}.</p></div>`;
+          return;
+        }
+
+        const rows = data.results.map((r) => {
+          const sign = r.r >= 0 ? "+" : "";
+          const cls = r.r >= 0 ? "pos" : "neg";
+          return `
+            <tr>
+              <td class="mono">${escapeHtml(r.code)}</td>
+              <td>${escapeHtml(r.name)}</td>
+              <td class="num">${r.n.toLocaleString()}</td>
+              <td class="num ${cls}">${sign}${r.r.toFixed(4)}</td>
+            </tr>
+          `;
+        }).join("");
+
+        area.innerHTML = `
+          <div class="result">
+            <p class="meta" style="margin:0 0 0.75rem;">
+              ${data.tested} other indicators tested · ${data.results.length} shown
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Name</th>
+                  <th style="text-align:right">n</th>
+                  <th style="text-align:right">r</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <p class="meta" style="margin-top:1rem; font-size:0.85rem;">
+              Exploratory scan across ${data.tested} hypotheses. False positives
+              are expected at this scale; treat weak correlations with caution.
+            </p>
+          </div>`;
+      } catch (err) {
+        area.innerHTML = `<p class="error">${escapeHtml(String(err))}</p>`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Utilities
+    // ---------------------------------------------------------------------
+
     function formatNum(x) {
       if (x === null || x === undefined) return "—";
       const abs = Math.abs(x);
@@ -358,7 +525,13 @@
       })[c]);
     }
 
+    // ---------------------------------------------------------------------
+    // Wire up
+    // ---------------------------------------------------------------------
+
     $("#correlate-form").addEventListener("submit", runCorrelation);
+    $("#scan-btn").addEventListener("click", runScan);
+
     loadIndicators();
   </script>
 </body>

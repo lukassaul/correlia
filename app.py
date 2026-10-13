@@ -255,3 +255,132 @@ def correlate(
         "year_end": year_end,
         "result": result,
     })
+@app.get("/scan")
+def scan(
+    indicator: str = Query(..., description="Target indicator code"),
+    support_level: str = Query("country"),
+    year_start: int = Query(1960),
+    year_end: int = Query(2024),
+    min_n: int = Query(50, description="Minimum paired observations"),
+    limit: int = Query(20, description="Maximum results to return"),
+    order: str = Query("abs", description="'abs' for |r|, 'pos' for r, 'neg' for -r"),
+) -> JSONResponse:
+    """
+    Scan every other indicator in the database for correlation with the
+    target indicator at the given support level and year range.
+
+    Returns the top-N results by absolute correlation, filtered by
+    minimum paired-observation count.
+    """
+    order_sql = {
+        "abs": "ORDER BY abs(r) DESC NULLS LAST",
+        "pos": "ORDER BY r DESC NULLS LAST",
+        "neg": "ORDER BY r ASC NULLS LAST",
+    }.get(order, "ORDER BY abs(r) DESC NULLS LAST")
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Resolve the target indicator
+            cur.execute(
+                "SELECT indicator_id FROM analysis.indicators WHERE code = %s",
+                (indicator,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"indicator not found: {indicator}",
+                )
+            target_id = row[0]
+
+            sql = f"""
+                WITH target AS (
+                    SELECT place_id, year, value
+                    FROM analysis.observations
+                    WHERE indicator_id = %(target)s
+                      AND support_level = %(level)s
+                      AND year BETWEEN %(y0)s AND %(y1)s
+                      AND value IS NOT NULL
+                ),
+                pairs AS (
+                    SELECT
+                        o.indicator_id,
+                        t.value AS x,
+                        o.value AS y
+                    FROM target t
+                    JOIN analysis.observations o
+                      ON o.place_id = t.place_id
+                     AND o.year = t.year
+                     AND o.support_level = %(level)s
+                     AND o.indicator_id != %(target)s
+                     AND o.value IS NOT NULL
+                ),
+                agg AS (
+                    SELECT
+                        indicator_id,
+                        count(*) AS n,
+                        corr(x, y) AS r
+                    FROM pairs
+                    GROUP BY indicator_id
+                    HAVING count(*) >= %(min_n)s
+                )
+                SELECT
+                    i.code,
+                    i.name,
+                    i.unit,
+                    s.title AS source_title,
+                    a.n,
+                    a.r
+                FROM agg a
+                JOIN analysis.indicators i ON i.indicator_id = a.indicator_id
+                LEFT JOIN analysis.sources s ON s.source_id = i.source_id
+                WHERE a.r IS NOT NULL
+                {order_sql}
+                LIMIT %(limit)s
+            """
+            cur.execute(sql, {
+                "target": target_id,
+                "level": support_level,
+                "y0": year_start,
+                "y1": year_end,
+                "min_n": min_n,
+                "limit": limit,
+            })
+            columns = [c.name for c in cur.description]
+            results = [dict(zip(columns, r)) for r in cur.fetchall()]
+
+            # Count how many indicators were tested in total
+            cur.execute("""
+                WITH target AS (
+                    SELECT place_id, year, value
+                    FROM analysis.observations
+                    WHERE indicator_id = %(target)s
+                      AND support_level = %(level)s
+                      AND year BETWEEN %(y0)s AND %(y1)s
+                      AND value IS NOT NULL
+                )
+                SELECT count(DISTINCT o.indicator_id)
+                FROM target t
+                JOIN analysis.observations o
+                  ON o.place_id = t.place_id
+                 AND o.year = t.year
+                 AND o.support_level = %(level)s
+                 AND o.indicator_id != %(target)s
+                 AND o.value IS NOT NULL
+            """, {
+                "target": target_id,
+                "level": support_level,
+                "y0": year_start,
+                "y1": year_end,
+            })
+            tested = cur.fetchone()[0]
+
+    return JSONResponse({
+        "indicator": indicator,
+        "support_level": support_level,
+        "year_start": year_start,
+        "year_end": year_end,
+        "min_n": min_n,
+        "tested": tested,
+        "results": results,
+    })

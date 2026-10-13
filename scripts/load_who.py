@@ -120,15 +120,13 @@ def reduce_to_one_slice(df):
 
 
 def find_indicator_name(code: str) -> str:
-    """Look up the human-readable name for a WHO indicator code."""
-    try:
-        info = who.indicators(code)
-        if info is not None and len(info) > 0 and "name" in info.columns:
-            return str(info.iloc[0]["name"])
-    except Exception:
-        pass
+    global _CATALOG
+    if _CATALOG is None:
+        _CATALOG = who.indicators()
+    match = _CATALOG[_CATALOG["IndicatorCode"] == code]
+    if not match.empty:
+        return str(match.iloc[0]["IndicatorName"])
     return code
-
 
 # ---------------------------------------------------------------------------
 # Database operations
