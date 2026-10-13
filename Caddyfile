@@ -1,16 +1,18 @@
 correlia.org {
     encode gzip
 
-    handle / {
-        root * /srv/frontend
-        file_server
+    @api path /health /health/* /indicators /indicators/* /correlate /correlate/* /scan /scan/*
+    handle @api {
+        reverse_proxy api:8000
     }
 
     handle {
-        reverse_proxy api:8000
+        root * /srv/frontend
+        file_server
     }
 }
 
 www.correlia.org {
     redir https://correlia.org{uri} permanent
 }
+EOF

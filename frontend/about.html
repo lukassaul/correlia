@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About Correlia</title>
+  <style>
+    :root {
+      --fg: #1a1a1a;
+      --bg: #fafafa;
+      --muted: #666;
+      --border: #ddd;
+      --accent: #2a5db0;
+      --panel: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fg: #eaeaea;
+        --bg: #16181c;
+        --muted: #999;
+        --border: #2e3138;
+        --accent: #6b9df0;
+        --panel: #1e2126;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      max-width: 42rem;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      font-size: 16px;
+    }
+    h1 { font-size: 1.75rem; margin: 0 0 0.5rem; letter-spacing: -0.01em; }
+    h2 { font-size: 1.2rem; margin: 2.5rem 0 0.75rem; }
+    p { margin: 0 0 1rem; }
+    a { color: var(--accent); }
+    .lead { font-size: 1.05rem; color: var(--muted); margin-bottom: 2rem; }
+    nav {
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.95rem;
+    }
+    nav a { margin-right: 1.25rem; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    .note {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1.5rem 0;
+      font-size: 0.95rem;
+    }
+    code {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      background: var(--panel);
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Correlia</a>
+    <a href="/about.html">About</a>
+    <a href="https://github.com/lukassaul/correlia">GitHub</a>
+  </nav>
+
+  <h1>About Correlia</h1>
+  <p class="lead">
+    A multi-scale geographic correlation database for exploring how
+    indicators move together across places and time.
+  </p>
+
+  <h2>What Correlia is</h2>
+  <p>
+    Correlia is a curated, open-access database that joins statistical
+    indicators from authoritative sources to a canonical geographic
+    hierarchy. It lets researchers ask questions like
+    <em>"what correlates with alcohol consumption?"</em> across dozens or
+    hundreds of indicators, at the country, regional, and city level.
+  </p>
+  <p>
+    The database is served at <a href="https://correlia.org">correlia.org</a>.
+    The API is read-only and public. Every observation is traceable to a
+    citable source with a declared license.
+  </p>
+
+  <h2>Why it exists</h2>
+  <p>
+    Statistical data is collected on widely different geographic units and
+    time periods. Country-level GDP, city-level consumption, regional
+    health outcomes, and local price surveys all live in separate silos,
+    keyed to incompatible identifiers. This makes correlation studies hard,
+    and it makes it easy to mistake an artifact of aggregation for a real
+    relationship.
+  </p>
+  <p>
+    Correlia addresses this by:
+  </p>
+  <ul>
+    <li>Anchoring every observation to a canonical place in a nested
+        hierarchy (country → admin1 → admin2 → city).</li>
+    <li>Recording the geographic level at which data was <em>actually
+        collected</em>, so the same query can be run at multiple scales
+        and compared.</li>
+    <li>Preserving provenance and license information for every source.</li>
+    <li>Making multi-scale queries trivial, which is the diagnostic for
+        Simpson's Paradox and other scale-dependent artifacts.</li>
+  </ul>
+
+  <h2>Data sources and licensing</h2>
+  <p>
+    Correlia only loads data from sources whose licenses permit public
+    redistribution. The current sources are:
+  </p>
+  <ul>
+    <li><strong>GeoNames</strong> — geographic backbone, CC BY 4.0.</li>
+    <li><strong>World Bank World Development Indicators</strong> —
+        CC BY 4.0.</li>
+    <li><strong>WHO Global Health Observatory</strong> — CC BY 4.0.</li>
+  </ul>
+  <p>
+    Each source's license is recorded in the database and surfaced through
+    the API. Sources that do not permit redistribution, or whose terms
+    restrict it, are not loaded into the public database even when they are
+    freely accessible to individual researchers.
+  </p>
+
+  <div class="note">
+    <strong>A note on correlation and causation.</strong>
+    Correlia is a hypothesis-generation tool, not a causal inference
+    engine. Exploratory scans across many indicators will produce false
+    positives by design; this is a property of multiple testing, not a
+    defect of the database. The <code>tested</code> field in scan
+    responses reports how many hypotheses were examined. Robust
+    correlations across scales are still not proof of a causal
+    relationship.
+  </div>
+
+  <h2>How to contribute</h2>
+  <p>
+    Contributions are welcome from researchers, institutions, and
+    automated agents. All submissions must conform to the contribution
+    contract, which requires canonical geographic identifiers, explicit
+    support levels, declared units, and provenance. See
+    <a href="https://github.com/lukassaul/correlia/blob/main/CONTRIBUTING.md">
+    CONTRIBUTING.md</a> for the full specification.
+  </p>
+  <p>
+    The code, schema, and loaders are on
+    <a href="https://github.com/lukassaul/correlia">GitHub</a>.
+  </p>
+
+  <h2>For data providers</h2>
+  <p>
+    If you represent an organization that publishes geographic or
+    statistical data and you are interested in having it indexed by
+    Correlia, please get in touch. We are particularly interested in
+    datasets with subnational coverage (regional, city, or finer), and in
+    data whose license permits public redistribution.
+  </p>
+  <p>
+    Contact: <a href="mailto:lukas@correlia.org">lukas@correlia.org</a>
+  </p>
+
+  <h2>Citation</h2>
+  <p>
+    Until a formal publication exists, please cite Correlia as:
+  </p>
+  <div class="note">
+    Saul, L. (2026). <em>Correlia: A multi-scale geographic correlation
+    database</em>. https://correlia.org
+  </div>
+</body>
+</html>
